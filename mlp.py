@@ -27,14 +27,14 @@ class MLP:
         self.output_size=output_size
         self.lr=lr
         #initializing weights and bias terms, will update in backward()
-        #assuming that input_size looks like torch.Size([128, 724]) and output_size=10
-        self.weights_hl1=torch.rand(input_size.size(dim=1), hidden_size)
+        self.weights_hl1=torch.rand(input_size, hidden_size)
         self.bias_hl1=torch.zeros(hidden_size)
 
         self.weights_hl2=torch.rand(hidden_size, output_size)
         self.bias_hl2=torch.zeros(output_size)
 
         """Building hidden layers:
+
         1st layer:
         [batch_size, input_features]*[input_features, hidden_size(number of neurons)]=[batch_size, hidden_size](weighted_features)
         weighted_features+ [batch_size, hidden_size](bias)=[batch_size, hidden_size](output matrix)
@@ -46,7 +46,7 @@ class MLP:
         """
     
     def forward(self, x):  # forward propagation to get predictions
-        #calling forward(inputs) assume inputs has been flattened to ([128, 724])
+        #assuming x is a tensor with dimensions (128,724)
         weighted_input_hl1=torch.matmul(x, self.weights_hl1)
         output_hl1=weighted_input_hl1 + self.bias_hl1
         activated_output_hl1=output_hl1.apply(sigmoid)
@@ -59,9 +59,13 @@ class MLP:
         return outputs
     
     def backward(self, x, y, pred):
-        print('backward')
+        print(f'Dimensions of pred should be (128,10) {pred.size()}') 
+        print(f'Dimensions of y should be (128) atp {y.size()}')
+        print(f'Dimensions of x should be (128, 724) {x.size()}')
         # one-hot encode the labels
-
+        encoded_y=torch.zeros(128,10)
+        for i in range(y.size(dim=0)):
+            encoded_y(i, y(i))=1
         # compute the gradients
         
         # update the weights and biases
@@ -73,19 +77,30 @@ class MLP:
         # call forward function
         predictions=self.forward(x)
         # calculate loss
-        
+        encoded_y=torch.zeros_like(y)
+        for i in range(y.size(dim=0)):
+            encoded_y(i, y(i))=1
+        #encoded_y and y are both tensors with dimensions (128,10)
+        for i in range(y.size(dim=0)):
+            loss += y[i,:]*torch.log(encoded_y[i,:]) + (1-y[i,:])*torch.log(1-encoded_y[i,:])
+        loss /= (-1/y.size(dim=0))
         # call backward function
 
         return loss
 
 def main():
     #Define instance of MLP globally so that it's training data (weights and biases) persists when using it on testing data
-    model=MLP()
+    
     # First, load data
     train_loader, test_loader = load_data()
     # Second, define hyperparameters
     input_size = 28*28  # MNIST images are 28x28 pixels
+    hidden_size= 15
+    output_size=10
+    learning_rate=.2
+    model=MLP(input_size, hidden_size, output_size, learning_rate)
     num_epochs = 100
+    batch_size=128
     # Then, train the model
     for epoch in range(num_epochs):
         total_loss = 0
