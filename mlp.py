@@ -34,9 +34,11 @@ def sigmoid(matrix_array):
 class MLP:
     def __init__(self, input_size, hidden_size, output_size, lr):  # building the model
         self.input_size=input_size
+        print(f'what is input size? {input_size}')
         self.hidden_size=hidden_size
         self.output_size=output_size
         self.lr=lr
+
         #initializing weights and bias terms, will update in backward()
         rng=np.random.default_rng()
         self.w_1=rng.normal(0, 1, (hidden_size, input_size))
@@ -61,30 +63,62 @@ class MLP:
         #assuming x is a matrix with dimensions (input_size, batch_size)
         batch_size=x.shape[1]
         z_1=np.matmul(self.w_1, x) + np.matmul(self.b_1, np.ones((1, batch_size)))
-        #apply sigmoid function elementwise to z_1 
-        a_1 = sigmoid(z_1)
+        #apply sigmoid function elementwise to z_1. cache a_1 for backprop
+        self.a_1 = sigmoid(z_1)
         #a_1 should have dimensions [hidden_size, batch_size]
 
-        z_2=np.matmul(self.w_2, a_1) + np.matmul(self.b_2, np.ones((1, batch_size)))
+        z_2=np.matmul(self.w_2, self.a_1) + np.matmul(self.b_2, np.ones((1, batch_size)))
         #z_2 has dimensions output_size, batch_size, apply softmax function on columns
         #call the vectorized softmax operation on z_2, a_2 has dimensions [output_size, batch_size]
         a_2=softmax(z_2)
         return a_2
     
     def backward(self, x, y, pred):
-        print(f'Dimensions of pred should be (128,10) {pred.size()}') 
-        print(f'Dimensions of y should be (128) atp {y.size()}')
-        print(f'Dimensions of x should be (128, 724) {x.size()}')
-        # one-hot encode the labels
+        #x.shape[1] corresponds to batch size, x.shape[0] corresponds to vector length 784
+        loss=0
+        for i in range(x.shape[1]):
+            loss += np.sum(-y[:,i] * np.log(pred[:,i]))
+        """      
+        dL/dz_2= dL/dy_hat * dy_hat/dz_2
+        dL/dy_hat is a 10x128 matrix where each column only has non-zero entry corresponding to the correct class
+        dy_hat/dz_2 even though both y_hat and z_2 are 10x128 matrices we calculate derivatives between columns of the same index. 
+        This results in 128 10x10 jacobians where each jacobian is multiplied with corresponding column produced by dL/dy_hat.
+        eg. assuming jacobian and vector correspond to same index dL/dz_2_i= (dy_hat/dz_2)^T * (dL/dy_hat)
+        This simplifies to every column having nine entries with values y_hat_j where j is correct class and (1-y_hat_j) at row j
+        """
+        dL_dz_2 = pred - y
+        #based on derivative of sigmoid. should have same dimensions as a_1, [hidden_size, batch_size]
+        da_1_dz_1= self.a_1 * (1-self.a_1)
+        dL_dz_1=np.matmul(np.transpose(self.w_2), dL_dz_2) * da_1_dz_1
+        #Dimensions of dL_dz_1 should be [hidden_size, batch_size]. Tested successfully 
         """ 
-        encoded_y=torch.zeros(128,10)
-        for i in range(y.size(dim=0)):
-            encoded_y(i, y(i))=1
-            """
+        "each column corresponding to index i  with j rows in z_2 was obtained from multiplying rows 1-j "
+        "of weight matrix * ith column of a_1. so this can really be boiled down to taking the derivative "
+        "of a vector wrt a vector which will give a jacobian, a jacobian with the same dimensions as the "
+        "weight matrix."
+        """
+
         # compute the gradients
-        
+        dL_dw_2= np.matmul(dL_dz_2, np.transpose(self.a_1))
+        #NEED TO EXPLAIN HOW I GOT DIMENSIONS TO MATCH
+        dL_dw_1 = np.matmul(dL_dz_1, np.transpose(x))
+        dL_db_1= np.sum(dL_dz_1, axis=1, keepdims=True)
+        dL_db_2= np.sum(dL_dz_2, axis=1, keepdims=True)
+        #Partial derivs of weights should match weights, tested succesfully 
+        #Partial Derivs of biases should match dimensions of biases, tested successfully.
+        #dimensions of dL_dw_2 should be the same as dimensions for w_2. tested successfully  
         # update the weights and biases
+        self.w_1 = self.w_1 - self.lr* dL_dw_1
+        self.w_2 = self.w_2- self.lr* dL_dw_2
+
+        self.b_1 = self.b_1- self.lr* dL_db_1
+        self.b_2 = self.b_2- self.lr* dL_db_2
+        """ 
+        The bias is technically a column vector being broadcast across all the rows, 
+        so we calculate dz2/db2 as sum of dL/dz2 across rows to get a column vector of output_size*1
+        """
         
+        return loss 
 
     def train(self, x,y):
         loss=0
@@ -92,16 +126,16 @@ class MLP:
         
         y_hat=self.forward(x)
         #One hot encode the vectors for y, then calculate the loss with cross entropy
-        #Call backwards update weights and biases within backwards return the loss and then train is called again in the loop
+        #Pass y_hat, encoded_y and input x to backward, update weights and biases in backward 
         
+          
         encoded_y=np.zeros((self.output_size, batch_size))
         for i in range(y.shape[0]):
             encoded_y[y[i], i]=1
+        loss= self.backward(x, encoded_y, y_hat)
+        #We need loss to calculate gradient descent so we calculate loss within backwards and then pass it to train when complete    
         #encoded_y and y are both tensors with dimensions (10, 128)
         #cross entropy loss by looping through columns might be able to vectorize
-        for i in range(batch_size):
-            loss += np.sum(-encoded_y[:,i] * np.log(y_hat[:,i]))
-        print(loss)
         return loss
 
 def main():
@@ -113,7 +147,7 @@ def main():
     input_size = 28*28  # MNIST images are 28x28 pixels
     hidden_size= 15
     output_size=10
-    learning_rate=.2
+    learning_rate=.01
     model=MLP(input_size, hidden_size, output_size, learning_rate)
     num_epochs = 100
     # Then, train the model
