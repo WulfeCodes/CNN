@@ -34,7 +34,6 @@ def sigmoid(matrix_array):
 class MLP:
     def __init__(self, input_size, hidden_size, output_size, lr):  # building the model
         self.input_size=input_size
-        print(f'what is input size? {input_size}')
         self.hidden_size=hidden_size
         self.output_size=output_size
         self.lr=lr
@@ -151,6 +150,7 @@ def main():
     model=MLP(input_size, hidden_size, output_size, learning_rate)
     num_epochs = 100
     # Then, train the model
+     
     for epoch in range(num_epochs):
         total_loss = 0
 
@@ -163,15 +163,15 @@ def main():
             
             total_loss += model.train(x, labels)
         print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(train_loader)}") # print the loss for each epoch
-
     # Finally, evaluate the model
     correct_pred = 0
     total_pred = 0
     for inputs, labels in test_loader:
         x = inputs.view(-1, input_size).numpy()
+        x = np.transpose(x)
         y = labels.numpy()
         pred = model.forward(x)  # the model refers to the model that was trained during the raining phase
-        predicted_labels = np.argmax(pred, 1)
+        predicted_labels = np.argmax(pred, 0)
         correct_pred += np.sum(predicted_labels == y)
         total_pred += len(labels)
     print(f"Test Accuracy: {correct_pred/total_pred}")
