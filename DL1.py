@@ -18,7 +18,7 @@ class NeuralNetLayer1:
         ##haha 64 is hard coded like fuck here
         self.input_dims = input_dims
         self.output_dims = output_dims
-        self.layerList = np.random.rand(64,input_dims) * 0.01
+        self.layerList = np.random.rand(64,input_dims) * np.sqrt(2/input_dims)
         self.outputList = np.ndarray((64,1))
         self.pre_outputList = np.ndarray((64,1))
         self.differentiated_outputList = np.ndarray((64,1))
@@ -83,7 +83,7 @@ class NeuralNetLayer2:
         self.input_dims = input_dims
         self.output_dims = output_dims
         #64 10x1 vectors.T, changed from 10,1,64 deleted batch dim
-        self.layerList = np.random.rand(10,64)
+        self.layerList = np.random.rand(10,64) * np.sqrt(2/64)
         self.outputList = np.ndarray((10,1))
         self.pre_outputList = np.ndarray((10,1))
         #temp y_actual, should be passed in a parameter. thatll be known once I analyze the mnist dataset
@@ -121,7 +121,9 @@ class NeuralNetLayer2:
         val = self.outputList[self.y_actual_index]
         safe_val = max(val, 1e-10)  # Increase this from 1e-12
         loss = -np.log(safe_val)
-        
+        print("here are the one hot encoded preds and its adjusted val", val, safe_val)
+        print("index of pred: ", self.y_actual_index)
+
         # Add clipping to prevent extreme gradient values
         loss = np.clip(loss, -100, 100)
         print(f"loss: {loss}")
@@ -161,36 +163,30 @@ class NeuralNetLayer2:
         #i dont think there is a negative here, if its just off of cross entropy/expected likelihood
         self.calc_sigmoid_activation_loss()
 
-        sigmoid_loss_vector = np.ndarray((10,1))
-        hidden_weight_loss_vector = np.ndarray((10,1))
+        softmax_loss_vector = np.ndarray((10,1))
 
-        for i in range(10):
-            sigmoid_loss_vector[i] = self.jacobian_sigmoid[i,self.y_actual_index]
+        # for i in range(10):
+        #     sigmoid_loss_vector[i] = self.jacobian_sigmoid[i,self.y_actual_index]
         
-        #backpropogate to create delta2: dL/dX2 = sigmoid_loss_vector ⊙ differentiated_lossVector
-        #delta 2 is 10x1, delta 1 is 64x1, self.LayerList is 10x64
-        #changed this to be a vector scaled by the derivative of the loss vector 
-        val = self.outputList[self.y_actual_index]
-        if isinstance(val, np.ndarray):
-            val = val.item() 
-        safe_val = max(val, 1e-12)     
+        for i in range(10):
+            if i==self.y_actual_index:
+                softmax_loss_vector[i] = self.outputList[i] - 1
+            else:
 
-
-        self.delta2 = sigmoid_loss_vector * -(1/safe_val)
+                softmax_loss_vector[i] = self.outputList[i]
+    
+        self.delta2 = softmax_loss_vector
+        print("delta 2 norm: ")
+        self.delta2 = clip_norm(self.delta2,100)
         self.delta1 = self.layerList.T @ self.delta2 
 
-        #update each weight matrix
-        #sigmoid loss vector is of 10x1 which represents the differentiated output by the sigmoid and the loss, leaving the weight operation of the prev layer being the next 
-        # for i in range(10):
-        #    hidden_weight_loss_vector[i] = sigmoid_loss_vector[i] * self.pre_outputList[i].T
-        #delta 2 will be used for latter loss computations, each delta is used for each layer
         return self.delta1
     
     def backPropogateWeights(self):
 
     #takes in a 64x1 vector,
     #multiplied by a 10x64 weights, delta2 is 10x1
-        self.layerList -= (0.0001 * self.delta2 @ self.input.T)
+        self.layerList -= (0.001 * self.delta2 @ self.input.T)
         print("layer weights 2 updated!")
  
 class outputFilter1:
@@ -202,8 +198,8 @@ class outputFilter1:
         #size 10 filter
         ##TODO change randomization to be of xavier/fan in variant 
 
-        self.filter0 = np.random.randn(self.filter_kernal_dims,self.filter_kernal_dims) * 0.01
-        self.filter1 = np.random.randn(self.filter_kernal_dims,self.filter_kernal_dims) * 0.01
+        self.filter0 = np.random.randn(self.filter_kernal_dims,self.filter_kernal_dims) * np.sqrt(2/self.filter_kernal_dims)
+        self.filter1 = np.random.randn(self.filter_kernal_dims,self.filter_kernal_dims) * np.sqrt(2/self.filter_kernal_dims)
         self.filterList = np.zeros((filter_num,self.filter_kernal_dims,self.filter_kernal_dims))
         self.filterList[0]=self.filter0
         self.filterList[1]=self.filter1
@@ -355,7 +351,7 @@ def load_mnist():
 
 def clip_norm(grad_vector,clipper_val):
     L2_gradV = np.linalg.norm(grad_vector)
-
+    print("norm value: ", L2_gradV)
     if L2_gradV > clipper_val:
         print("had to clip playa, gradients are exploding")
         clipped_grad = (clipper_val/L2_gradV) * grad_vector
@@ -370,8 +366,9 @@ if __name__=="__main__":
     #TODO write backpropogation logic for Neural Networks{activation functions, weight matrices} && CNN{activation functions}: 1 day
         #then the debug step: max 2 days then its mf done!!!
     # Define the transformation for MNIST data
+
     train_images, train_labels, test_images, test_labels=load_mnist()
-    epochs = 40000
+    epochs = 60000
 
     #haha calling main w no code
     main()
@@ -465,11 +462,14 @@ if __name__=="__main__":
 
         lossVector1 = n2.backPropogateCalc()
 
-        lossVector1 = clip_norm(lossVector1, 50)
+        print("lossVector 1: ")
+        lossVector1 = clip_norm(lossVector1, 100)
 
         lossVector0 = n1.backPropogateCalc(lossVector1)
 
-        lossVector0 = clip_norm(lossVector0, 50)
+        print("lossVector 0: ")
+
+        lossVector0 = clip_norm(lossVector0, 100)
         # print("SHAPE CHECK OF delLoss/delNNInput",lossVector0.shape)
 
         #add backpropogation logic for each channel weight!
@@ -497,8 +497,9 @@ if __name__=="__main__":
                 #should pass in o1.outList here
                 lossesArray1[i] +=o1.backwardMatrices(o1.filterList[j],lossesArray[j],o1.OutList[j])
                 
-        #Hopefully these lossesArrays clip properly lol, not sure if np.linalgnorm takes in 3D
-        lossesArray1 = clip_norm(lossesArray1,50)
+
+        print("lossArray 1: ")
+        lossesArray1 = clip_norm(lossesArray1,100)
             #input dims is of p.filter_num, p.output_dims or o1.input_dims x p.output_dims or o1.input_dims
             #each output list should correspond to a one to many, meaning many to one output matrices will update the outputList
 
@@ -506,7 +507,8 @@ if __name__=="__main__":
         for k in range(p.filter_num):
             lossesArray2[k]=p.backwardMatrices(o.OutList[k],lossesArray1[k])
 
-        lossesArray2 = clip_norm(lossesArray2,50)
+        print("lossArray2: ")
+        lossesArray2 = clip_norm(lossesArray2,100)
 
         for k in range(o.filter_num):
             # print("backprop check",o.filterList.shape,data[i].shape,lossesArray2.shape)
@@ -543,9 +545,9 @@ if __name__=="__main__":
     for i in range(len(test_images)):
         if i%10 == 0:
             print(f"epoch: {i}")
-            print("training accuracy: ", correct_predictions/i)
+            print("testing accuracy: ", correct_test_predictions/i)
 
-        n2.y_actual = train_labels[i]
+        n2.y_actual = test_labels[i]
         n2.y_actual_index =  n2.y_actual
         #this needs to be set according to the dataset!
         # print("got to here")
@@ -599,9 +601,18 @@ if __name__=="__main__":
 
         output_loss=n2.calc_loss()
 
+        #TODO no training is done on testing!
+
 
         nn_input = np.zeros((0,1))
 
+        lossesArray = np.zeros((p1.filter_num,p1.input_dims,p1.input_dims))
+        lossesArray1 = np.zeros((p.filter_num,o1.input_dims,o1.input_dims))
+        lossesArray2 = np.zeros((p.filter_num,p.input_dims,p.input_dims))
+        lossesArray3 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+        lossVector1 = None
+        lossVector2 = None
+    print(f"finished testing, final accuracy is: {correct_test_predictions/len(test_images)}" )
         #this sequence of for loops up above just connects the loss gradient wrt to each input matrix
         #down below is where the backward matrix operation happens!
 
