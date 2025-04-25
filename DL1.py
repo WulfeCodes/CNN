@@ -543,7 +543,7 @@ if __name__=="__main__":
     correct_test_predictions= 0
 
     for i in range(len(test_images)):
-        if i%10 == 0:
+        if i%10 == 0 and i >10:
             print(f"epoch: {i}")
             print("testing accuracy: ", correct_test_predictions/i)
 
