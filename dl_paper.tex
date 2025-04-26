@@ -1,0 +1,95 @@
+\documentclass[12pt]{article}
+\usepackage{xcolor}
+\usepackage{paralist}
+\usepackage{enumitem}
+\newcommand{\nl}{$\newline$}
+\usepackage{listings}
+\usepackage[fleqn]{amsmath}
+\usepackage{amssymb}
+\newcommand{\gradient}[2]{\frac{\partial {#1}}{\partial {#2}}}
+\usepackage[a4paper, left=1.5cm, right=1.5cm, top=2cm, bottom=2cm]{geometry}
+\begin{document} 
+\begin{flushleft}
+   
+The report should include:  
+(1) Introduction: background and motivation, problem definition, system overview, etc. 
+(2) Methodology: algorithm design, logic flow, and implementation. Clearly describe the steps of 
+manually implementing MLP and CNN (e.g. convolution operations, Forward). Provide code 
+snippets to explain the core functions (e.g. forward(), backward()). demonstrate the back
+propagation derivation (e.g. gradient calculation) of MLP and CNN. 
+(3) Evaluation: settings for experiments and demo, observations and result discussions. 
+(4) Learning outcomes: tasks accomplished and specific contributions by each team member, 
+reasons for unaccomplished tasks or any failures, lessons learned from the project and teamwork 
+experience.
+The report will be graded over 100 points. It should include the following sections: 
+(1) Introduction (10 points). 
+(2) Methodology (40 points). 
+(3) Performance evaluation (30 points). 
+(4) Learning outcomes (20 points).
+
+A supervised neural network can classify images. Neural networks accomplish this by performing mathematical operations on unlabeled input data with random numbers (call these numbers parameters) and produce a guess as output. The guess is compared with labeled data and the neural network adjusts the variables to produce more accurate guesses. Several variations of specialized neural networks exist that operate based on the principles outlined above but also include other mechanisms that make them particularly suited to image classification. A convolutional neural network is one such example.
+A multilayer perceptron is one of the most basic forms of a neural network. \nl
+We designed the MLP with the following goal: the MLP should accept a batch of 28x28 images, perform forward propagation on the batch and produce vectors with the same dimensions as the labeled outputs so that the network output and the expected output can be compared, and finally perform backpropagation so that the output becomes more accurate as the network cycles through epochs. We managed to accomplish this with an accuracy of about 94\% on average. 
+	We begin with initializing the MLP object with input\_size, hidden\_size, output\_size and learning\_rate. The weights are initialized to small random values with gaussian distribution so that nonlinear activation functions are less likely to vanish. Biases are initialized to 0.  
+	
+	\begin{verbatim}
+   model=MLP(input_size, hidden_size, output_size, learning_rate)
+	\end{verbatim}
+
+	\begin{verbatim}
+   self.input_size=input_size
+   self.hidden_size=hidden_size
+   self.output_size=output_size
+   self.lr=lr
+
+   #Weights and biases initialized
+   rng=np.random.default_rng()
+   self.w_1=rng.normal(0, 1, (self.hidden_size, self.input_size))
+   self.b_1=np.zeros((hidden_size,1), dtype=np.float64)
+   
+   self.w_2=rng.normal(0, 1, (self.output_size, self.hidden_size))
+   self.b_2=np.zeros((self.output_size,1), dtype=np.float64)
+   
+	\end{verbatim}
+
+The most optimal values turned out to be: input\_size = 28x28 = 784, hidden\_size = 32, output\_size = 10. So, the dimensions of weights and biases are the following: $w_1 \in \mathbb{R}^{32 x 784}, b_1 \in \mathbb{R}^{32 x 1}, w_2 \in \mathbb{R}^{10 x 32}, b_2 \in \mathbb{R}^{10 x 1}$.\nl
+
+After the MLP object is initialized, we enter a double for loop where the outer for loop runs for the number of epochs we've set. One epoch is finished when all of the images in the entire network have been evaluated. Minibatches allow the network to run relatively quickly even with limited compute power because the dimensions of the input matrix is reduced from 784 x (entire training set size) to 784 x (batch\_size). The inner for loop vectorizes each image from the inputs loader column-wise and calls the training function of MLP on the batch of images and their corresponding labels. 
+
+\begin{verbatim}
+   x=np.empty((input_size, batch_size))
+   inputs=inputs.numpy()
+   for i in range(inputs.shape[0]):
+      x[:, i]=np.ravel(inputs[i,...]) 
+      labels=labels.numpy()
+                  
+   total_loss += model.train(x, labels)
+   \end{verbatim}
+
+   The train function starts by extracting the batch\_size variable from x dynamically and calling the forward propogation method. The forward method performs forward propagation and obtains predicted classes for the images. The forward propagation sequence is straightforward. The forward propogation method returns $a^{[2]}$ 
+\begin{equation}
+	(\text{Input: x} \in \mathbb{R}^{10 x 128}) \xrightarrow{z^{[1]} = w^{[1]}a^{[0]} + b^{[1]}} (f(z^{[1]}) = a^{[1]}) \xrightarrow{z^{[2]} = w^{[2]}a^{[1]} +b^{[2]}} (g(z^{[2]}) = a^{[2]}) 
+\end{equation}
+
+This is accomplished with the following code: 
+\begin{verbatim}
+
+def forward(self, x):  # forward propagation to get predictions
+    batch_size=x.shape[1]
+    z_1=np.matmul(self.w_1, x) + np.matmul(self.b_1, np.ones((1, batch_size)))
+    self.a_1 = sigmoid(z_1)
+
+    z_2=np.matmul(self.w_2, self.a_1) + np.matmul(self.b_2, np.ones((1, batch_size)))
+    a_2=softmax(z_2)
+    return a_2
+\end{verbatim}
+
+$b_1 \in \mathbb{R}^{32 x 1}, b_2 \in \mathbb{R}^{10 x 1}$ but the bias terms need to match dimensions: $\mathbb{R}^{\text{hidden\_size x 10}}$ and $\mathbb{R}^{\text{10 x batch\_size}}$ respectively so we expand the dimensions column wise with matrix multiplication. 
+Once the forward method has returned predictions, we call the backward method on our input, $\hat{y}$ and $y$. Backward starts by comparing the accuracy of predicted class $\hat{y}$ and actual class $y$ with cross entropy loss. Cross entropy loss is chosen because ? 
+Once we've obtained a loss we want to obtain the following partial derivatives:$\gradient{L}{w^{[2]}}, \gradient{L}{w^{[1]}}, \gradient{L}{b^{[2]}}, \gradient{L}{b^{[1]}}$ . $\gradient{L}{w^{[2]}}$ returns the direction of steepest ascent, if $w^{[2]}$ is updated in the opposite direction of the gradient, this should lead to a reduced loss. The same logic applies to the other three gradients. In order to obtain the gradients we use the chain rule combined with backward propagation.\nl 
+
+For the MLP the highest accuracy achieved was .9518 with a loss of 2.5904. This occurred when hidden\_size = 90 and learning\_rate = 0.1. Any learning rate higher than .01 led to overshooting the gradient and the loss function not decreasing monotonically. When hidden\_size = 15, the accuracy achieved was .9228. With a hidden\_size = 64 accuracy was .9442. The accuracy increases as the hidden\_size increases but with diminishing returns. So, we determined that the best most ideal model to submit had a hidden\_size = 90 with learning rate = .01. To avoid conflicts in our code bases, we divided the implementation cleanly between the two of us. Stephanie was responsible for coding the MLP and Vijay was responsible for coding the CNN. Stephanie experienced confusion over back propagation in terms of what the dimensions of matrices should be and comprehending why the derivatives for sigmoid and SoftMax function make sense. Vijay was confused about such and such. Using our respective existing domain knowledge and strengths, we helped each other strengthen our understanding of (convolutional) neural networks and determine exact implementation details. 
+For the MLP the highest accuracy achieved was .9518 with a loss of 2.5904. This occurred when hidden_size = 90 and learning_rate = 0.1. Any learning rate higher than .01 led to overshooting the gradient and the loss function not decreasing monotonically. When hidden_size = 15, the accuracy achieved was .9228. With a hidden_size = 64 accuracy was .9442. The accuracy increases as the hidden_size increases but with diminishing returns. So, we determined that the best most ideal model to submit had a hidden_size = 90 with learning rate = .01. To avoid conflicts in our code bases, we divided the implementation cleanly between the two of us. Stephanie was responsible for coding the MLP and Vijay was responsible for coding the CNN. Stephanie experienced confusion over back propagation in terms of what the dimensions of matrices should be and comprehending why the derivatives for sigmoid and SoftMax function make sense. Vijay was confused about such and such. Using our respective existing domain knowledge and strengths, we helped each other strengthen our understanding of (convolutional) neural networks and determine exact implementation details. 
+\end{flushleft}
+\end{document}
+  
