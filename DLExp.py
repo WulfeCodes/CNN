@@ -604,7 +604,7 @@ if __name__=="__main__":
 
         if np.argmax(n2.outputList) == train_labels[i]:
             correct_predictions +=1
-            print("correct prediction:", correct_predictions) 
+            print("correct prediction:", correct_test_predictions) 
 
 
         output_loss=n2.calc_loss()
