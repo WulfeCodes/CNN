@@ -69,7 +69,7 @@ class NeuralNetLayer1:
     def backPropogateWeights(self,delta2):
         #partial of H_w{i}=input_i@deltai+1, for here it should equal 64 x 1936 dims
         #delta2 is 64x1 self.input is 1936x1
-        self.layerList -= (0.002 * delta2 @ self.input.T)
+        self.layerList -= (0.001 * delta2 @ self.input.T)
         print("updated the weights!")
         
 
@@ -113,7 +113,6 @@ class NeuralNetLayer2:
         shifted = self.outputList - np.max(self.outputList)  # Prevent overflow
         exps = np.exp(shifted)
         self.outputList = exps / (np.sum(exps) + 1e-10)  # Add epsilon
-
         print("softmaxxed output:",self.outputList)
 
     def calc_loss(self):
@@ -185,7 +184,7 @@ class NeuralNetLayer2:
 
     #takes in a 64x1 vector,
     #multiplied by a 10x64 weights, delta2 is 10x1
-        self.layerList -= (0.002 * self.delta2 @ self.input.T)
+        self.layerList -= (0.001 * self.delta2 @ self.input.T)
         print("layer weights 2 updated!")
  
 class outputFilter1:
@@ -197,7 +196,7 @@ class outputFilter1:
         #size 10 filter
         ##TODO change randomization to be of xavier/fan in variant 
         
-        self.filterList = np.zeros((filter_num,self.filter_kernal_dims,self.filter_kernal_dims))
+        self.filterList = np.random.rand(filter_num,self.filter_kernal_dims,self.filter_kernal_dims) * np.sqrt(2/input_dims)
 
         self.initKernels()
 
@@ -213,6 +212,7 @@ class outputFilter1:
         for i in range(self.filter_num):
             print("ranning!")
             self.filterList[i]= np.random.randn(self.filter_kernal_dims,self.filter_kernal_dims) * np.sqrt(2/self.filter_kernal_dims)
+            
     def forward(self,input,filter,k): 
         temp = np.zeros((self.output_dims,self.output_dims))
         pretemp = np.zeros((self.output_dims, self.output_dims))
@@ -221,7 +221,6 @@ class outputFilter1:
         #if stride were to take effect, just change the iterator of i and j for loops
         #TODO decouple leaky relu, would be done by done at backpropogation
         # print("output dims equals: ",self.output_dims)
-
         for i in range(self.output_dims):
             # print("i is ", i)
             for j in range(self.output_dims):
@@ -233,7 +232,6 @@ class outputFilter1:
                 #hadamard product or reg matrix multiplication?s
                 pretemp[i][j]=np.sum(input[i:i+self.filter_kernal_dims,j:j+self.filter_kernal_dims]*filter)
                 temp[i][j]=self.leaky_relu_inline(np.sum(input[i:i+self.filter_kernal_dims,j:j+self.filter_kernal_dims]*filter))
-
         self.preOutList[k]=pretemp
         return temp
     
@@ -264,7 +262,7 @@ class outputFilter1:
                 derivative = self.leaky_relu_derivative(region_sum)
                 delta_val = lossDelta[i, j] * derivative
                 scaled_region = region * delta_val
-                temp += 0.002 * scaled_region       
+                temp += 0.001 * scaled_region  
         return temp
 
 class poolingLayer1:
@@ -349,181 +347,102 @@ if __name__=="__main__":
     # Define the transformation for MNIST data
 
     train_images, train_labels, test_images, test_labels=load_mnist()
-    epochs = 1
+    epochs = 3
 
     #haha calling main w no code
     main()
     # self,input_dims, filter_kernel_dims, filter_num, stride
-    o =outputFilter1(28,3,4,1)
+    o =outputFilter1(28,8,1,1)
     temp = o.output_dims
     #self,input_dims, filter_kernel_dims, filter_num, stride
-    p = poolingLayer1(temp,2,4,1)
-    temp = p.output_dims
     # print("temp is!", temp)
-    o1 =outputFilter1(temp,3,2,1)
     # print("o1 output dims",o1.output_dims)
-    temp = o1.output_dims
-    p1 = poolingLayer1(temp,2,2,1)
     # print("o1 output1 dims", o1.output_dims)
     #pooling layer depth must be equivalent to input depth
     
     #length is defined as a output square stretched times number of channels
     # print("p1.outlist shape:", p1.OutList.shape)
     # print("p1 output dims:", p1.output_dims)
-    length = p1.output_dims * p1.filter_num * p1.output_dims
+    length = o.output_dims * o.output_dims
     nn_input = np.zeros((0,1))
-    lossesArray = np.zeros((p1.filter_num,p1.input_dims,p1.input_dims))
-    lossesArray1 = np.zeros((p.filter_num,o1.input_dims,o1.input_dims))
-    lossesArray2 = np.zeros((p.filter_num,p.input_dims,p.input_dims))
+    currLossMatrix = np.ndarray((o.output_dims,o.output_dims))
     lossesArray3 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
 
-    n1 = NeuralNetLayer1(length, 64)
-    n2 = NeuralNetLayer2(64, 10)
+    n2 = NeuralNetLayer2(length, 10)
 
-    correct_predictions = 0
+
 
     for z in range(epochs):
+        correct_predictions = 0
         for i in range(len(train_images)):
-            if i>10 and i%10 == 0:
-                print(f"epoch: {i}")
-                print("training accuracy: ", correct_predictions/i)
+                print(i)
+                if i%10 == 0 and i >10:
+                    print(f"epoch: {z+1},iteration: {i}")
+                    print("training accuracy: ", correct_predictions/i)
 
-            n2.y_actual = train_labels[i]
-            n2.y_actual_index =  n2.y_actual
-            #this needs to be set according to the dataset!
-            # print("got to here")
-            #feed forward logic heyr
-            
-            ##loops through number of channels for each layer
-            for k in range(o.filter_num):
-                # print("computing channel {%d}",k)
-                o.OutList[k]=o.forward(train_images[i],o.filterList[k],k)
+                n2.y_actual = train_labels[i]
+                n2.y_actual_index =  n2.y_actual
 
-            for k in range(p.filter_num):
-                # print("WE POOLING")
-                p.OutList[k]=p.forward(o.OutList[k])
-
-            # print("o shape:", p.OutList.shape)
-
-            # print("debugging filter numbers: p1 then o1", p1.filter_num,o1.filter_num)
-
-            #this convolution operation is done by the summation of the convolution operations of each previous filter by one convo Kernal
-            for k in range(o1.filter_num):
-                tempMatrix = np.zeros((o1.output_dims,o1.output_dims))
-                for z in range(p.filter_num):
-                    # print("convo layer numba 2")
-                    # # print(o1.output_dims)
-                    # print("respected shapes: ", p.OutList[z].shape, o1.filterList[k].shape,tempMatrix.shape)
-                    tempMatrix+=o1.forward(p.OutList[z],o1.filterList[k],k)
-                    # print("pooling 1 number",p1.filter_num)
-                o1.OutList[k]=tempMatrix
-            # print("o1 outlist shape",o1.OutList.shape)
-
-            # print("nn input shape before the accident:", nn_input.shape)
-            for k in range(p1.filter_num):
-                # print("we pooling numba 2!",k)
-                p1.OutList[k]=p1.forward(o1.OutList[k])
-                flat = p1.OutList[k].flatten().reshape(-1, 1)
+                ##loops through number of channels for each layer
+                    # print("computing channel {%d}",k)
+                o.OutList[0]=o.forward(train_images[i],o.filterList[0],0)
+                flat = o.OutList[0].flatten().reshape(-1, 1)
                 # print("flat shape: ",flat.shape)
                 nn_input = np.concatenate((nn_input, flat), axis=0)
+                # print("normal shape", nn_input.shape)
+                # print("got past n1")
+                n2.forward(nn_input)
 
-            # print("normal shape", nn_input.shape)
-            n1.forward(nn_input)
-            # print("got past n1")
-            n2.forward(n1.outputList)
+                # print("got past n2")
+                n2.softmaxxer()
+                if np.argmax(n2.outputList) == train_labels[i]:
+                    correct_predictions +=1
+                    print("correct prediction:", correct_predictions) 
 
-            # print("got past n2")
-            n2.softmaxxer()
+                output_loss=n2.calc_loss()
+                lossVector1 = n2.backPropogateCalc()
+                # print(lossVector1)
+                print("lossVector1")
+                lossVector1 = clip_norm(lossVector1, 100)
 
-            if np.argmax(n2.outputList) == train_labels[i]:
-                correct_predictions +=1
-                print("correct prediction:", correct_predictions) 
+                # print("SHAPE CHECK OF delLoss/delNNInput",lossVector0.shape)
 
-
-            output_loss=n2.calc_loss()
-
-            lossVector1 = n2.backPropogateCalc()
-
-            print("lossVector 1: ")
-            # print(lossVector1)
-            lossVector1 = clip_norm(lossVector1, 100)
-
-            lossVector0 = n1.backPropogateCalc(lossVector1)
-
-            print("lossVector 0: ")
-
-            lossVector0 = clip_norm(lossVector0, 100)
-            # print("SHAPE CHECK OF delLoss/delNNInput",lossVector0.shape)
-
-            #add backpropogation logic for each channel weight!
-            currLossMatrix = np.ndarray((p1.filter_num,p1.output_dims,p1.output_dims))
-
-            #this should be good for backpropogating along each input by their contributing quantity by avg: 1/k^2 * DelL/Del(corresponding output slice)
-            #haha as of rn, currLossMatrix is implemented horribly wrong, how do I change this creatively?
-                #right now its only slicing through 2*k slices, where it should be slicing k^2 input slices! 
-                #[lossVector0[k*p1.output_dims:(k+1)*pow(p1.output_dims,2)]]
-            for k in range(p1.filter_num):
-                #currLossMatrix initializer
-                for y in range(p1.output_dims):
-                    for z in range(p1.output_dims):
-                        index = (k * pow(p1.output_dims,2)) + ((y * p1.output_dims) + z)
-                        currLossMatrix[k][y][z] = lossVector0[index].item()
-
-                # print("shape check of delLoss/delNNInput_slice:",currLossMatrix.shape)
-                lossesArray[k]=p1.backwardMatrices(o1.OutList[k],currLossMatrix[k])
-                # print("checking for delta shapes: ",lossesArray.shape,o1.OutList.shape)
-            
-    #OR>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-            #but would the losses array be respecitvely associated with this result? I say yes because it is linearly associated with each filter keeping the mapping respective
-            #TODO I think this implementation is wrong, there should be  
-            for i in range(p.filter_num):
-                for j in range(o1.filter_num):
-                    lossesArray1[i] +=o1.backwardMatrices(o1.filterList[j],lossesArray[j],o1.preOutList[j])
-
-            print("lossArray 1: ")
-            lossesArray1 = clip_norm(lossesArray1,100)
-                #input dims is of p.filter_num, p.output_dims or o1.input_dims x p.output_dims or o1.input_dims
-                #each output list should correspond to a one to many, meaning many to one output matrices will update the outputList
-
-            # print("checking for delta shapes1: ",lossesArray1.shape,p.OutList.shape)
-            for k in range(p.filter_num):
-                lossesArray2[k]=p.backwardMatrices(o.OutList[k],lossesArray1[k])
-
-            print("lossArray2: ")
-            lossesArray2 = clip_norm(lossesArray2,100)
-
-            for k in range(o.filter_num):
-                # print("backprop check",o.filterList.shape,data[i].shape,lossesArray2.shape)
-                o.filterList[k] -= o.backPropogateWeights(train_images[i],lossesArray2[k])
+                #add backpropogation logic for each channel weight!
 
 
-            temp = np.zeros_like(o1.filterList[0])
-            print(o1.filterList.shape,o1.filter_num)
-            # print("checking losses shape, dont mind me",lossesArray.shape)
-            for j in range(o1.filter_num):
-                temp = np.zeros_like(o1.filterList[0])
-                for k in range(2):
-                    temp+=o1.backPropogateWeights(p.OutList[k],lossesArray[j])
-                o1.filterList[j] -= temp
+                print("shape checker",lossVector1.shape)
+                for y in range(o.output_dims):
+                    for z in range(o.output_dims):
+                        currLossMatrix[y][z] = lossVector1[y*o.output_dims + z].item()
 
-            print("backpropogated Convolutional weights!")
-            n1.backPropogateWeights(lossVector1)
-            n2.backPropogateWeights()
+                    # print("shape check of delLoss/delNNInput_slice:",currLossMatrix.shape)
+                    # print("checking for delta shapes: ",lossesArray.shape,o1.OutList.shape)
+                
+                    # print("backprop check",o.filterList.shape,data[i].shape,lossesArray2.shape)
+                print("currLossMatrix")
+                currLossMatrix=clip_norm(currLossMatrix, 100)
+                o.filterList[0] -= o.backPropogateWeights(train_images[i],currLossMatrix)
 
+                # print("backpropogated outputfilter")
 
-            # print("gradient monitoring",lossesArray,lossesArray1,lossesArray2)
-            nn_input = np.zeros((0,1))
-            lossesArray = np.zeros((p1.filter_num,p1.input_dims,p1.input_dims))
-            lossesArray1 = np.zeros((p.filter_num,o1.input_dims,o1.input_dims))
-            lossesArray2 = np.zeros((p.filter_num,p.input_dims,p.input_dims))
-            lossesArray3 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
-            lossVector1 = None
-            lossVector2 = None
+                print("backpropogated Convolutional weights!")
+                n2.backPropogateWeights()
+
+                # print("gradient monitoring",lossesArray,lossesArray1,lossesArray2)
+                nn_input = np.zeros((0,1))
+                lossesArray = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+                lossesArray1 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+                lossesArray2 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+                lossesArray3 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+                lossVector1 = None
+                lossVector2 = None
+                currLossMatrix = np.ndarray((o.output_dims,o.output_dims))
 
 
     correct_test_predictions= 0
 
     for i in range(len(test_images)):
+        print(i)
         if i%10 == 0 and i >10:
             print(f"epoch: {i}")
             print("testing accuracy: ", correct_test_predictions/i)
@@ -532,129 +451,58 @@ if __name__=="__main__":
         n2.y_actual_index =  n2.y_actual
 
         ##loops through number of channels for each layer
-        for k in range(o.filter_num):
             # print("computing channel {%d}",k)
-            o.OutList[k]=o.forward(test_images[i],o.filterList[k],k)
-
-        for k in range(p.filter_num):
-            # print("WE POOLING")
-            p.OutList[k]=p.forward(o.OutList[k])
-
-        # print("o shape:", p.OutList.shape)
-
-        # print("debugging filter numbers: p1 then o1", p1.filter_num,o1.filter_num)
-
-        #this convolution operation is done by the summation of the convolution operations of each previous filter by one convo Kernal
-        for k in range(o1.filter_num):
-            tempMatrix = np.zeros((o1.output_dims,o1.output_dims))
-            for z in range(p.filter_num):
-                # print("convo layer numba 2")
-                # # print(o1.output_dims)
-                # print("respected shapes: ", p.OutList[z].shape, o1.filterList[k].shape,tempMatrix.shape)
-                tempMatrix+=o1.forward(p.OutList[z],o1.filterList[k],k)
-                # print("pooling 1 number",p1.filter_num)
-            o1.OutList[k]=tempMatrix
-        # print("o1 outlist shape",o1.OutList.shape)
-
-        # print("nn input shape before the accident:", nn_input.shape)
-        for k in range(p1.filter_num):
-            # print("we pooling numba 2!",k)
-            p1.OutList[k]=p1.forward(o1.OutList[k])
-            flat = p1.OutList[k].flatten().reshape(-1, 1)
-            # print("flat shape: ",flat.shape)
-            nn_input = np.concatenate((nn_input, flat), axis=0)
-
+        o.OutList[0]=o.forward(test_images[i],o.filterList[0],0)
+        flat = o.OutList[0].flatten().reshape(-1, 1)
+        # print("flat shape: ",flat.shape)
+        nn_input = np.concatenate((nn_input, flat), axis=0)
         # print("normal shape", nn_input.shape)
-        n1.forward(nn_input)
         # print("got past n1")
-        n2.forward(n1.outputList)
+        n2.forward(nn_input)
 
         # print("got past n2")
         n2.softmaxxer()
-
         if np.argmax(n2.outputList) == test_labels[i]:
             correct_test_predictions +=1
             print("correct prediction:", correct_test_predictions) 
 
+
         output_loss=n2.calc_loss()
-
         lossVector1 = n2.backPropogateCalc()
-
-        print("lossVector 1: ")
         # print(lossVector1)
+        print("lossVector1")
         lossVector1 = clip_norm(lossVector1, 100)
 
-        lossVector0 = n1.backPropogateCalc(lossVector1)
-
-        print("lossVector 0: ")
-
-        lossVector0 = clip_norm(lossVector0, 100)
         # print("SHAPE CHECK OF delLoss/delNNInput",lossVector0.shape)
 
         #add backpropogation logic for each channel weight!
-        currLossMatrix = np.ndarray((p1.filter_num,p1.output_dims,p1.output_dims))
 
-        #this should be good for backpropogating along each input by their contributing quantity by avg: 1/k^2 * DelL/Del(corresponding output slice)
-        #haha as of rn, currLossMatrix is implemented horribly wrong, how do I change this creatively?
-            #right now its only slicing through 2*k slices, where it should be slicing k^2 input slices! 
-            #[lossVector0[k*p1.output_dims:(k+1)*pow(p1.output_dims,2)]]
-        for k in range(p1.filter_num):
-            #currLossMatrix initializer
-            for y in range(p1.output_dims):
-                for z in range(p1.output_dims):
-                    index = (k * pow(p1.output_dims,2)) + ((y * p1.output_dims) + z)
-                    currLossMatrix[k][y][z] = lossVector0[index].item()
+
+        print("shape checker",lossVector1.shape)
+        for y in range(o.output_dims):
+            for z in range(o.output_dims):
+                currLossMatrix[y][z] = lossVector1[y*o.output_dims + z].item()
 
             # print("shape check of delLoss/delNNInput_slice:",currLossMatrix.shape)
-            lossesArray[k]=p1.backwardMatrices(o1.OutList[k],currLossMatrix[k])
             # print("checking for delta shapes: ",lossesArray.shape,o1.OutList.shape)
         
-#OR>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
-        #but would the losses array be respecitvely associated with this result? I say yes because it is linearly associated with each filter keeping the mapping respective
-        #TODO I think this implementation is wrong, there should be  
-        for i in range(p.filter_num):
-            for j in range(o1.filter_num):
-                #should pass in o1.outList here
-                lossesArray1[i] +=o1.backwardMatrices(o1.filterList[j],lossesArray[j],o1.preOutList[j])
-                
-
-        print("lossArray 1: ")
-        lossesArray1 = clip_norm(lossesArray1,100)
-            #input dims is of p.filter_num, p.output_dims or o1.input_dims x p.output_dims or o1.input_dims
-            #each output list should correspond to a one to many, meaning many to one output matrices will update the outputList
-
-        # print("checking for delta shapes1: ",lossesArray1.shape,p.OutList.shape)
-        for k in range(p.filter_num):
-            lossesArray2[k]=p.backwardMatrices(o.OutList[k],lossesArray1[k])
-
-        print("lossArray2: ")
-        lossesArray2 = clip_norm(lossesArray2,100)
-
-        for k in range(o.filter_num):
             # print("backprop check",o.filterList.shape,data[i].shape,lossesArray2.shape)
-            o.filterList[k] -= o.backPropogateWeights(train_images[i],lossesArray2[k])
+        print("currLossMatrix")
+        currLossMatrix=clip_norm(currLossMatrix, 100)
+        o.filterList[0] -= o.backPropogateWeights(train_images[i],currLossMatrix)
+
         # print("backpropogated outputfilter")
 
-        temp = np.zeros_like(o1.filterList[0])
-        print(o1.filterList.shape,o1.filter_num)
-        # print("checking losses shape, dont mind me",lossesArray.shape)
-        for j in range(o1.filter_num):
-            temp = np.zeros_like(o1.filterList[0])
-            for k in range(2):
-                temp+=o1.backPropogateWeights(p.OutList[k],lossesArray[j])
-            o1.filterList[j] -= temp
-
         print("backpropogated Convolutional weights!")
-        n1.backPropogateWeights(lossVector1)
         n2.backPropogateWeights()
 
         # print("gradient monitoring",lossesArray,lossesArray1,lossesArray2)
         nn_input = np.zeros((0,1))
-        lossesArray = np.zeros((p1.filter_num,p1.input_dims,p1.input_dims))
-        lossesArray1 = np.zeros((p.filter_num,o1.input_dims,o1.input_dims))
-        lossesArray2 = np.zeros((p.filter_num,p.input_dims,p.input_dims))
+        lossesArray = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+        lossesArray1 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
+        lossesArray2 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
         lossesArray3 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
         lossVector1 = None
         lossVector2 = None
+        currLossMatrix = np.ndarray((o.output_dims,o.output_dims))
     print("testing accuracy: ", correct_test_predictions/len(test_images))
-    print("final training accuracy: ", correct_predictions/len(train_images))
