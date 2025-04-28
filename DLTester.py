@@ -686,3 +686,4 @@ if __name__=="__main__":
         lossesArray3 = np.zeros((o.filter_num,o.input_dims,o.input_dims))
         lossVector1 = None
         lossVector2 = None
+    print("testing accuracy: ", correct_test_predictions/len(test_images))
